@@ -1,14 +1,24 @@
 # hush
 
-Silence your Mac before a video call. Run it again when the call ends.
+A Mac terminal command that silences your computer before a video call.
+
+Open Terminal (or iTerm, Ghostty, Warp, whatever you use), then type:
 
 ```sh
 hush
 ```
 
-It zeros alert volume, pauses Spotify, Music, and other media apps, and pauses [peon ping](https://github.com/PeonPing/peon-ping) if you have it. Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+Type `hush` again when the call ends.
 
-macOS only.
+It zeros macOS alert volume, pauses Spotify, Music, and other media apps, and pauses [peon ping](https://github.com/PeonPing/peon-ping) if you have it. Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+
+## Support
+
+macOS only. It talks to the system through AppleScript, so it will not run on Linux or Windows.
+
+It is a bash script, not an app and not a zsh plugin. Drop it on your PATH and any shell can run it: zsh, bash, fish, whatever.
+
+No Homebrew, no dependencies. [peon ping](https://github.com/PeonPing/peon-ping) is optional.
 
 ## Install
 
@@ -18,13 +28,17 @@ curl -fsSL https://raw.githubusercontent.com/robertgaal/hush/main/bin/hush -o ~/
 chmod +x ~/.local/bin/hush
 ```
 
-`~/.local/bin` needs to be on your PATH.
+If `hush` is not found after that, add this to `~/.zshrc` (or `~/.bashrc`) and open a new tab:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ## Commands
 
 ```sh
 hush          # toggle
-hush on
-hush off
+hush on       # mute
+hush off      # restore
 hush status
 ```
