@@ -1,0 +1,113 @@
+#!/bin/bash
+# Silence peon ping, macOS alert sounds, and music apps. Call audio stays.
+# Run hush to toggle, hush on to mute, hush off to restore.
+
+set -u
+
+STATE_DIR="${XDG_CACHE_HOME:-$HOME/Library/Caches}/hush"
+STATE="$STATE_DIR/state"
+PEON="$(command -v peon 2>/dev/null || true)"
+if [ -z "$PEON" ] && [ -x "$HOME/.local/bin/peon" ]; then
+  PEON="$HOME/.local/bin/peon"
+fi
+
+mkdir -p "$STATE_DIR"
+
+alert_volume() {
+  osascript -e 'alert volume of (get volume settings)'
+}
+
+set_alert_volume() {
+  osascript -e "set volume alert volume $1"
+}
+
+peon_paused() {
+  [ -n "$PEON" ] && "$PEON" status 2>/dev/null | grep -q 'peon-ping: paused'
+}
+
+pause_media() {
+  killall afplay 2>/dev/null || true
+  killall say 2>/dev/null || true
+  osascript <<'APPLESCRIPT' 2>/dev/null || true
+set mediaApps to {"Spotify", "Music", "TV", "QuickTime Player", "VLC", "IINA", "VOX", "Swinsian"}
+tell application "System Events" to set procs to name of every process
+repeat with appName in mediaApps
+  if procs contains appName then
+    try
+      tell application appName to pause
+    end try
+  end if
+end repeat
+APPLESCRIPT
+}
+
+hush_off() {
+  if [ ! -f "$STATE" ]; then
+    echo "hush: sounds are already on"
+    return 0
+  fi
+
+  # shellcheck disable=SC1090
+  . "$STATE"
+  rm -f "$STATE"
+
+  set_alert_volume "${ALERT_VOLUME:-100}"
+  if [ -n "$PEON" ] && [ "${PEON_WAS_PAUSED:-1}" = "0" ]; then
+    "$PEON" resume >/dev/null
+  fi
+  echo "hush: sounds restored"
+}
+
+hush_on() {
+  if [ -f "$STATE" ]; then
+    echo "hush: already on"
+    return 0
+  fi
+
+  local volume was_paused=1
+  volume="$(alert_volume)"
+  if [ -n "$PEON" ]; then
+    if peon_paused; then
+      was_paused=1
+    else
+      was_paused=0
+      "$PEON" pause >/dev/null
+    fi
+  fi
+
+  printf 'ALERT_VOLUME=%s\nPEON_WAS_PAUSED=%s\n' "$volume" "$was_paused" >"$STATE"
+  set_alert_volume 0
+  pause_media
+  if [ -n "$PEON" ]; then
+    echo "hush: paused peon, alerts, and music. Call audio stays."
+  else
+    echo "hush: paused alerts and music. Call audio stays."
+  fi
+}
+
+hush_toggle() {
+  if [ -f "$STATE" ]; then
+    hush_off
+  else
+    hush_on
+  fi
+}
+
+case "${1:-}" in
+  status)
+    if [ -f "$STATE" ]; then
+      echo "hush: on"
+    else
+      echo "hush: off"
+    fi
+    ;;
+  on)
+    hush_on
+    ;;
+  off)
+    hush_off
+    ;;
+  *)
+    hush_toggle
+    ;;
+esac
