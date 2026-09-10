@@ -10,7 +10,9 @@ hush
 
 Type `hush` again when the call ends.
 
-It zeros macOS alert volume, pauses Spotify, Music, and other media apps, and pauses [peon ping](https://github.com/PeonPing/peon-ping) if you have it. Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+It zeros macOS alert volume, pauses Spotify, Music, and other media apps, pauses [peon ping](https://github.com/PeonPing/peon-ping) if you have it, and turns off Cursor's thread-finished chime. Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+
+Slack, Chrome, and other apps that play through the main speaker are not muted. Muting those would also mute the call.
 
 ## Support
 

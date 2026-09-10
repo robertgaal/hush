@@ -1,6 +1,6 @@
 #!/bin/bash
-# Silence peon ping, macOS alert sounds, and music apps. Call audio stays.
-# Run hush to toggle, hush on to mute, hush off to restore.
+# Silence peon ping, macOS alert sounds, Cursor chimes, and music apps.
+# Call audio stays. Run hush to toggle, hush on to mute, hush off to restore.
 
 set -u
 
@@ -25,9 +25,49 @@ peon_paused() {
   [ -n "$PEON" ] && "$PEON" status 2>/dev/null | grep -q 'peon-ping: paused'
 }
 
+cursor_pref() {
+  python3 - "$@" <<'PY'
+import pathlib, re, sys
+
+path = pathlib.Path.home() / "Library/Application Support/Cursor/User/settings.json"
+key = "cursor.composer.shouldChimeAfterChatFinishes"
+pat = re.compile(r'("' + re.escape(key) + r'"\s*:\s*)(true|false)')
+
+def read():
+    return path.read_text() if path.exists() else ""
+
+cmd = sys.argv[1]
+if cmd == "get":
+    text = read()
+    m = pat.search(text)
+    print(m.group(2) if m else "true")
+elif cmd == "set":
+    value = sys.argv[2]
+    if not path.exists():
+        sys.exit(0)
+    text = read()
+    m = pat.search(text)
+    if m:
+        text = pat.sub(r"\1" + value, text, count=1)
+    else:
+        before, brace, after = text.rpartition("}")
+        body = before.rstrip()
+        if body and not body.endswith("{") and not body.endswith(","):
+            body += ","
+        text = body + "\n  \"" + key + "\": " + value + ",\n" + brace + after
+    path.write_text(text)
+PY
+}
+
 pause_media() {
-  killall afplay 2>/dev/null || true
-  killall say 2>/dev/null || true
+  killall afplay peon-play say 2>/dev/null || true
+  for pidfile in \
+    "$HOME/.claude/hooks/peon-ping/.sound.pid" \
+    "$HOME/.openpeon/.sound.pid"; do
+    if [ -f "$pidfile" ]; then
+      kill "$(cat "$pidfile")" 2>/dev/null || true
+    fi
+  done
   osascript <<'APPLESCRIPT' 2>/dev/null || true
 set mediaApps to {"Spotify", "Music", "TV", "QuickTime Player", "VLC", "IINA", "VOX", "Swinsian"}
 tell application "System Events" to set procs to name of every process
@@ -55,6 +95,9 @@ hush_off() {
   if [ -n "$PEON" ] && [ "${PEON_WAS_PAUSED:-1}" = "0" ]; then
     "$PEON" resume >/dev/null
   fi
+  if [ -n "${CURSOR_CHIME:-}" ]; then
+    cursor_pref set "$CURSOR_CHIME"
+  fi
   echo "hush: sounds restored"
 }
 
@@ -64,8 +107,9 @@ hush_on() {
     return 0
   fi
 
-  local volume was_paused=1
+  local volume was_paused=1 chime
   volume="$(alert_volume)"
+  chime="$(cursor_pref get)"
   if [ -n "$PEON" ]; then
     if peon_paused; then
       was_paused=1
@@ -75,14 +119,12 @@ hush_on() {
     fi
   fi
 
-  printf 'ALERT_VOLUME=%s\nPEON_WAS_PAUSED=%s\n' "$volume" "$was_paused" >"$STATE"
+  printf 'ALERT_VOLUME=%s\nPEON_WAS_PAUSED=%s\nCURSOR_CHIME=%s\n' \
+    "$volume" "$was_paused" "$chime" >"$STATE"
   set_alert_volume 0
+  cursor_pref set false
   pause_media
-  if [ -n "$PEON" ]; then
-    echo "hush: paused peon, alerts, and music. Call audio stays."
-  else
-    echo "hush: paused alerts and music. Call audio stays."
-  fi
+  echo "hush: paused peon, Cursor chimes, alerts, and music. Call audio stays."
 }
 
 hush_toggle() {
