@@ -10,9 +10,18 @@ hush
 
 Type `hush` again when the call ends.
 
-It zeros macOS alert volume, pauses Spotify, Music, and other media apps, pauses [peon ping](https://github.com/PeonPing/peon-ping) if you have it, and turns off Cursor's thread-finished chime. Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+## What it mutes
 
-Slack, Chrome, and other apps that play through the main speaker are not muted. Muting those would also mute the call.
+- macOS alert volume: system beeps, Finder sound effects, and Notification Center sounds
+- Spotify, Music, TV, QuickTime, VLC, IINA, VOX, and Swinsian (paused)
+- [peon ping](https://github.com/PeonPing/peon-ping), if installed
+- Cursor's "chime after chat finishes"
+
+Speaker and Zoom/Meet audio stay on, so you can still hear the other person.
+
+Cursor gets its own switch because its chime plays through the main output, not the alert channel. hush flips `cursor.composer.shouldChimeAfterChatFinishes` to `false` in Cursor's `settings.json` and puts it back on `hush off`. Cursor picks the change up live.
+
+Claude Code, the Claude desktop app, and Codex CLI don't need one: their sounds go through the terminal bell, Notification Center, or peon ping, all of which the alert volume already covers.
 
 ## Support
 
@@ -20,7 +29,7 @@ macOS only. It talks to the system through AppleScript, so it will not run on Li
 
 It is a bash script, not an app and not a zsh plugin. Drop it on your PATH and any shell can run it: zsh, bash, fish, whatever.
 
-No Homebrew, no dependencies. [peon ping](https://github.com/PeonPing/peon-ping) is optional.
+No Homebrew, no dependencies. peon ping and Cursor are optional.
 
 ## Install
 
