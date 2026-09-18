@@ -43,38 +43,58 @@ APPLESCRIPT
 
 CURSOR_SETTINGS="$HOME/Library/Application Support/Cursor/User/settings.json"
 CURSOR_CHIME_KEY='"cursor.composer.shouldChimeAfterChatFinishes"'
+# Screen reader mode (editor.accessibilitySupport: on) makes every "auto" signal
+# audible on each tool call. Cursor reads this key, not accessibility.signals.sounds.volume.
+CURSOR_SIGNAL_VOLUME_KEY='"accessibility.signalOptions.volume"'
 
 # Cursor's settings.json allows trailing commas, so edit the line, not the JSON.
-cursor_chime() {
+# Only bool and number values are handled; strings could hold commas.
+cursor_setting() {
   [ -f "$CURSOR_SETTINGS" ] || { echo "none"; return; }
   local line
-  line="$(grep -E "^[[:space:]]*${CURSOR_CHIME_KEY}[[:space:]]*:" "$CURSOR_SETTINGS" | head -1)"
-  case "$line" in
-    "") echo "absent" ;;
-    *true*) echo "true" ;;
-    *) echo "false" ;;
-  esac
+  line="$(grep -E "^[[:space:]]*$1[[:space:]]*:" "$CURSOR_SETTINGS" | head -1)"
+  if [ -z "$line" ]; then
+    echo "absent"
+    return
+  fi
+  printf '%s\n' "$line" | sed -E "s/^[[:space:]]*$1[[:space:]]*:[[:space:]]*//; s/[[:space:],]*$//"
 }
 
-set_cursor_chime() {
+set_cursor_setting() {
   [ -f "$CURSOR_SETTINGS" ] || return 0
-  sed -i '' -E "s/^([[:space:]]*${CURSOR_CHIME_KEY}[[:space:]]*:[[:space:]]*)(true|false)/\1$1/" "$CURSOR_SETTINGS"
+  sed -i '' -E "s/^([[:space:]]*$1[[:space:]]*:[[:space:]]*)[^,[:space:]]*/\1$2/" "$CURSOR_SETTINGS"
 }
 
-add_cursor_chime_off() {
+add_cursor_setting() {
   [ -f "$CURSOR_SETTINGS" ] || return 0
   local tmp
   tmp="$(mktemp)"
-  awk -v line="  ${CURSOR_CHIME_KEY}: false," '
+  awk -v line="  $1: $2," '
     { print }
     !done && /\{/ { print line; done = 1 }
   ' "$CURSOR_SETTINGS" >"$tmp" && cat "$tmp" >"$CURSOR_SETTINGS"
   rm -f "$tmp"
 }
 
-remove_cursor_chime() {
+remove_cursor_setting() {
   [ -f "$CURSOR_SETTINGS" ] || return 0
-  sed -i '' -E "/^[[:space:]]*${CURSOR_CHIME_KEY}[[:space:]]*:[[:space:]]*false,?[[:space:]]*$/d" "$CURSOR_SETTINGS"
+  sed -i '' -E "/^[[:space:]]*$1[[:space:]]*:[[:space:]]*$2,?[[:space:]]*$/d" "$CURSOR_SETTINGS"
+}
+
+mute_cursor_setting() {
+  case "$2" in
+    none | "$3") ;;
+    absent) add_cursor_setting "$1" "$3" ;;
+    *) set_cursor_setting "$1" "$3" ;;
+  esac
+}
+
+restore_cursor_setting() {
+  case "$2" in
+    none | "$3") ;;
+    absent) remove_cursor_setting "$1" "$3" ;;
+    *) set_cursor_setting "$1" "$2" ;;
+  esac
 }
 
 hush_off() {
@@ -91,10 +111,8 @@ hush_off() {
   if [ -n "$PEON" ] && [ "${PEON_WAS_PAUSED:-1}" = "0" ]; then
     "$PEON" resume >/dev/null
   fi
-  case "${CURSOR_CHIME:-none}" in
-    true) set_cursor_chime true ;;
-    absent) remove_cursor_chime ;;
-  esac
+  restore_cursor_setting "$CURSOR_CHIME_KEY" "${CURSOR_CHIME:-none}" false
+  restore_cursor_setting "$CURSOR_SIGNAL_VOLUME_KEY" "${CURSOR_SIGNAL_VOLUME:-none}" 0
   echo "hush: sounds restored"
 }
 
@@ -115,20 +133,20 @@ hush_on() {
     fi
   fi
 
-  local chime
-  chime="$(cursor_chime)"
+  local chime signal_volume
+  chime="$(cursor_setting "$CURSOR_CHIME_KEY")"
+  signal_volume="$(cursor_setting "$CURSOR_SIGNAL_VOLUME_KEY")"
 
-  printf 'ALERT_VOLUME=%s\nPEON_WAS_PAUSED=%s\nCURSOR_CHIME=%s\n' "$volume" "$was_paused" "$chime" >"$STATE"
+  printf 'ALERT_VOLUME=%s\nPEON_WAS_PAUSED=%s\nCURSOR_CHIME=%s\nCURSOR_SIGNAL_VOLUME=%s\n' \
+    "$volume" "$was_paused" "$chime" "$signal_volume" >"$STATE"
   set_alert_volume 0
-  case "$chime" in
-    true) set_cursor_chime false ;;
-    absent) add_cursor_chime_off ;;
-  esac
+  mute_cursor_setting "$CURSOR_CHIME_KEY" "$chime" false
+  mute_cursor_setting "$CURSOR_SIGNAL_VOLUME_KEY" "$signal_volume" 0
   pause_media
 
   local muted="alerts, music"
   [ -n "$PEON" ] && muted="peon, $muted"
-  [ "$chime" != "none" ] && muted="$muted, Cursor's chime"
+  [ "$chime" != "none" ] && muted="$muted, Cursor"
   echo "hush: on. Muted: $muted. Call audio stays."
 }
 
